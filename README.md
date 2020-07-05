@@ -12,7 +12,7 @@ This library helps with routing in elm [applications](https://package.elm-lang.o
 ## Notes
 
 - [Official Guide](https://guide.elm-lang.org/) might be easier for your app
-- Will provide an example app after publishing this package
+- Added simple example
 
 ## Config
 
@@ -106,7 +106,7 @@ A **title** function like:
 title : Route -> Maybe String
 title route =
     case route of
-        Home _ ->
+        Home ->
             Nothing
 
         About ->
