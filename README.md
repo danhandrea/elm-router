@@ -9,6 +9,11 @@ This library helps with routing in elm [applications](https://package.elm-lang.o
 - Manage page update, view
 - Manage page subscriptions individually (subscriptions from previously opened pages will run in background)
 
+## To do
+
+- Rename message NoOp to -> SetViewport
+- Rename message GrabViewportPushUrl to GetViewport/GrabViewport?
+
 ## Notes
 
 - [Official Guide](https://guide.elm-lang.org/) might be easier for your app
