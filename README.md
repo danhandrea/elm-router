@@ -14,7 +14,11 @@ This library helps with routing in elm [applications](https://package.elm-lang.o
 - 1.0.1 Added example
 - 1.0.2 Added example passing data from model to parser so you can use that data in page init
 
+## To do
 
+- ? Rename message NoOp to -> SetViewport
+- ? Rename message GrabViewportPushUrl to GetViewport/GrabViewport
+- 
 ## Notes
 
 - [Official Guide](https://guide.elm-lang.org/) might be easier for your app
