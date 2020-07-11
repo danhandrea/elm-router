@@ -9,6 +9,12 @@ This library helps with routing in elm [applications](https://package.elm-lang.o
 - Manage page update, view
 - Manage page subscriptions individually (subscriptions from previously opened pages will run in background)
 
+## Change log
+
+- 1.0.1 Added example
+- 1.0.2 Added example passing data from model to parser so you can use that data in page init
+
+
 ## Notes
 
 - [Official Guide](https://guide.elm-lang.org/) might be easier for your app
