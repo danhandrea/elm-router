@@ -122,6 +122,7 @@ type alias Config msg route routeMsg =
     , subscriptions : route -> Sub routeMsg
     , notFound : Url -> List (Html msg)
     , routeTitle : route -> Maybe String
+    , onUrlChanged : Maybe (Url -> msg)
     }
 
 
@@ -136,8 +137,8 @@ notFoundTitle =
 
 {-| Init
 -}
-init : Config msg route routeMsg -> Url -> Key -> Router route
-init { parser, routeTitle } url key =
+init : Config msg route routeMsg -> Url -> Key -> ( Router route, Cmd msg )
+init { parser, routeTitle, message } url key =
     let
         empty =
             { url = url
@@ -146,17 +147,22 @@ init { parser, routeTitle } url key =
             , viewports = Dict.empty
             , routes = Dict.empty
             }
+
+        grabViewport =
+            Task.perform (GrabViewport url >> message) Dom.getViewport
     in
     case Parser.parse parser url of
         Nothing ->
-            Router { empty | pageTitle = notFoundTitle }
+            ( Router { empty | pageTitle = notFoundTitle }, grabViewport )
 
         Just route ->
-            Router
+            ( Router
                 { empty
                     | routes = Dict.singleton (Url.toString url) route
                     , pageTitle = routeTitle route
                 }
+            , grabViewport
+            )
 
 
 
@@ -192,6 +198,14 @@ update config message (Router router) =
 
                         Nothing ->
                             Cmd.none
+
+                notifyUrlChanged =
+                    case config.onUrlChanged of
+                        Just method ->
+                            Task.succeed (method newUrl) |> Task.perform identity
+
+                        Nothing ->
+                            Cmd.none
             in
             ( Router
                 { router
@@ -199,7 +213,7 @@ update config message (Router router) =
                     , routes = routes
                     , pageTitle = Maybe.withDefault notFoundTitle <| Maybe.map config.routeTitle route
                 }
-            , cmd
+            , Cmd.batch [ cmd, notifyUrlChanged ]
             )
 
         GrabViewport url viewport ->

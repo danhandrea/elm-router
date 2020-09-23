@@ -23,6 +23,7 @@ type alias Model =
 
 type Msg
     = Router (Router.Msg Route.Msg)
+    | UrlChanged Url
 
 
 
@@ -38,6 +39,7 @@ config =
     , subscriptions = Route.subscriptions
     , notFound = Route.notFound
     , routeTitle = Route.title
+    , onUrlChanged = Just UrlChanged
     }
 
 
@@ -48,10 +50,10 @@ config =
 init : () -> Url -> Key -> ( Model, Cmd Msg )
 init _ url key =
     let
-        router =
+        ( router, cmd ) =
             Router.init config url key
     in
-    ( Model router, Cmd.none )
+    ( Model router, cmd )
 
 
 
@@ -67,6 +69,9 @@ update message ({ router } as model) =
                     Router.update config msg router
             in
             ( { model | router = newRouter }, cmd )
+
+        UrlChanged url ->
+            ( model, Cmd.none )
 
 
 

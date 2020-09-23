@@ -40,6 +40,7 @@ config a =
     , subscriptions = Route.subscriptions
     , notFound = Route.notFound
     , routeTitle = Route.title
+    , onUrlChanged = Nothing
     }
 
 
@@ -53,10 +54,10 @@ init _ url key =
         foo =
             "Bar"
 
-        router =
+        ( router, cmd ) =
             Router.init (config foo) url key
     in
-    ( Model router foo, Cmd.none )
+    ( Model router foo, cmd )
 
 
 
