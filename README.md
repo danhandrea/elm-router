@@ -13,12 +13,14 @@ This library helps with routing in elm [applications](https://package.elm-lang.o
 
 - 1.0.1 Added example
 - 1.0.2 Added example passing data from model to parser so you can use that data in page init
+- 1.1.0 Added query methods: currentUrl, currentRoute, currentViewPort
 
 ## To do
 
 - ? Rename message NoOp to -> SetViewport
 - ? Rename message GrabViewportPushUrl to GetViewport/GrabViewport
-- 
+-
+
 ## Notes
 
 - [Official Guide](https://guide.elm-lang.org/) might be easier for your app
@@ -51,7 +53,6 @@ type Route
 type Msg
     = ContactMsg Contact.Model Contact.Msg
 ```
-
 
 You will need to provide the **parser** like:
 
@@ -93,7 +94,7 @@ view route =
                 |> Router.mapMsg (ContactMsg mdl)
 ```
 
-A **subscriptions** function like: 
+A **subscriptions** function like:
 
 ```elm
 subscriptions : Route -> Sub Msg
@@ -129,6 +130,7 @@ title route =
 And a **notFound** function like:
 
 where
+
 ```elm
 import Html as H exposing (Html)
 import Url exposing (Url)
@@ -140,7 +142,7 @@ notFound url =
     ]
 ```
 
-build a `Config` like: 
+build a `Config` like:
 
 ```elm
 config : Config App.Msg Route Route.Msg
@@ -155,7 +157,7 @@ config =
     }
 ```
 
-where: 
+where:
 
 - `App.Msg` is your application `Msg`
 - `App.Router` is the message in your application `Msg` created for the `Router`
@@ -163,6 +165,7 @@ where:
 And use the **config** created in **your** application like:
 
 Assuming:
+
 ```elm
 import Route exposing (Route)
 import Router
