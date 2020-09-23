@@ -6,6 +6,7 @@ module Router exposing
     , view
     , subscriptions
     , mapMsg, mapRoute, mapUpdate
+    , currentUrl, currentRoute, currentViewPort
     )
 
 {-| Router
@@ -46,6 +47,11 @@ Manages elm routing pages
 # mapping
 
 @docs mapMsg, mapRoute, mapUpdate
+
+
+# Query
+
+@docs currentUrl, currentRoute, currentViewPort
 
 -}
 
@@ -98,7 +104,7 @@ type Msg routeMsg
     | UrlRequest UrlRequest
     | Route routeMsg
     | Sub String routeMsg
-    | GrabViewportPushUrl Url Viewport
+    | GrabViewport Url Viewport
     | NoOp
 
 
@@ -166,7 +172,7 @@ update config message (Router router) =
             case request of
                 Internal newUrl ->
                     ( Router router
-                    , Task.perform (GrabViewportPushUrl newUrl >> config.message) Dom.getViewport
+                    , Task.perform (GrabViewport newUrl >> config.message) Dom.getViewport
                     )
 
                 External newUrl ->
@@ -196,7 +202,7 @@ update config message (Router router) =
             , cmd
             )
 
-        GrabViewportPushUrl url viewport ->
+        GrabViewport url viewport ->
             ( Router
                 { router
                     | viewports =
@@ -332,6 +338,27 @@ title (Router { pageTitle }) appTitle =
 
         Just t ->
             appTitle ++ " - " ++ t
+
+
+{-| currentUrl
+-}
+currentUrl : Router route -> Url
+currentUrl (Router { url }) =
+    url
+
+
+{-| currentRoute
+-}
+currentRoute : Router route -> Maybe route
+currentRoute (Router { url, routes }) =
+    Dict.get (Url.toString url) routes
+
+
+{-| currentViewPort
+-}
+currentViewPort : Router route -> Maybe Viewport
+currentViewPort (Router { url, viewports }) =
+    Dict.get (Url.toString url) viewports
 
 
 
