@@ -21,9 +21,9 @@ type alias Model =
 -- INIT
 
 
-init : String -> String -> Model
+init : String -> String -> ( Model, Cmd Msg )
 init name email =
-    Model name email 0
+    ( Model name email 0, Cmd.none )
 
 
 
@@ -57,19 +57,20 @@ update msg model =
 -- VIEW
 
 
-view : Model -> List (Html Msg)
+view : Model -> Html Msg
 view { name, email, ticks } =
-    [ H.h1 [] [ H.text "Contact" ]
-    , H.section []
-        [ H.input
-            [ A.type_ "text", A.value name, E.onInput Name ]
-            []
-        , H.input
-            [ A.type_ "email", A.value email, E.onInput Email ]
-            []
-        , H.label [] [ H.text <| "ticks : " ++ String.fromInt ticks ]
+    H.div []
+        [ H.h1 [] [ H.text "Contact" ]
+        , H.section []
+            [ H.input
+                [ A.type_ "text", A.value name, E.onInput Name ]
+                []
+            , H.input
+                [ A.type_ "email", A.value email, E.onInput Email ]
+                []
+            , H.label [] [ H.text <| "ticks : " ++ String.fromInt ticks ]
+            ]
         ]
-    ]
 
 
 

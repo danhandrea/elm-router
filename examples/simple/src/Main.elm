@@ -4,6 +4,7 @@ import Browser exposing (Document)
 import Browser.Navigation exposing (Key)
 import Html as H
 import Html.Attributes as A
+import Page exposing (Page)
 import Route exposing (Route)
 import Router exposing (Config, Router)
 import Url exposing (Url)
@@ -14,7 +15,9 @@ import Url exposing (Url)
 
 
 type alias Model =
-    { router : Router Route }
+    { router : Router Route Page
+    , foo_ : ()
+    }
 
 
 
@@ -22,23 +25,16 @@ type alias Model =
 
 
 type Msg
-    = Router (Router.Msg Route.Msg)
+    = Router (Router.Msg Page.Msg)
 
 
 
 -- ROUTER CONFIG
 
 
-config : Config Msg Route Route.Msg
+config : Config Msg Route Page Page.Msg
 config =
-    { parser = Route.parser
-    , update = Route.update
-    , view = Route.view
-    , message = Router
-    , subscriptions = Route.subscriptions
-    , notFound = Route.notFound
-    , routeTitle = Route.title
-    }
+    Config Router Route.parser Route.NotFound Page.init Page.update Page.view Page.subscriptions Router.defaultOptions
 
 
 
@@ -48,10 +44,10 @@ config =
 init : () -> Url -> Key -> ( Model, Cmd Msg )
 init _ url key =
     let
-        router =
+        ( router, cmd ) =
             Router.init config url key
     in
-    ( Model router, Cmd.none )
+    ( Model router (), cmd )
 
 
 
@@ -75,15 +71,16 @@ update message ({ router } as model) =
 
 view : Model -> Document Msg
 view { router } =
-    { title = Router.title router "My app"
+    { title = "My app"
     , body =
         [ H.nav []
             [ H.a [ A.href "/" ] [ H.text "Home" ]
             , H.a [ A.href "/about" ] [ H.text "About" ]
-            , H.a [ A.href "/contact" ] [ H.text "Contact" ]
+            , H.a [ A.href "/contact/foo/foo@bar" ] [ H.text "Contact foo" ]
+            , H.a [ A.href "/contact/bar/bar@foo" ] [ H.text "Contact bar" ]
             , H.a [ A.href "/something_not_routed" ] [ H.text "404" ]
             ]
-        , H.main_ [] (Router.view config router)
+        , Router.view config router
         ]
     }
 
@@ -108,6 +105,6 @@ main =
         , update = update
         , view = view
         , subscriptions = subscriptions
-        , onUrlChange = Router.onUrlChange config
-        , onUrlRequest = Router.onUrlRequest config
+        , onUrlChange = Router.onUrlChange Router
+        , onUrlRequest = Router.onUrlRequest Router
         }

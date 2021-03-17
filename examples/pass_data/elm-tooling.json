@@ -1,0 +1,5 @@
+{
+    "entrypoints": [
+        "./examples/pass_data/src/Main.elm"
+    ]
+} 

@@ -6,7 +6,7 @@ This library helps with routing in elm [applications](https://package.elm-lang.o
 
 - Maintain state of all opened pages
 - Remember [Viewport](https://package.elm-lang.org/packages/elm/browser/latest/Browser-Dom#Viewport) of opened pages. (scroll position)
-- Manage page update, view
+- Manage page init, view, update
 - Manage page subscriptions individually (subscriptions from previously opened pages will run in background)
 
 ## Change log
