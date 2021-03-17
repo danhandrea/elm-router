@@ -53,6 +53,11 @@ module Router exposing
 
 @docs redirect
 
+
+# Query
+
+@docs currentUrl, currentRoute, currentViewPort
+
 -}
 
 import Browser exposing (UrlRequest(..))
@@ -327,6 +332,27 @@ redirect config ((Router { base }) as router) path =
             { base | path = path }
     in
     update config (UrlRequest (Internal url_)) router
+
+
+{-| currentUrl
+-}
+currentUrl : Router route -> Url
+currentUrl (Router { url }) =
+    url
+
+
+{-| currentRoute
+-}
+currentRoute : Router route -> Maybe route
+currentRoute (Router { url, routes }) =
+    Dict.get (Url.toString url) routes
+
+
+{-| currentViewPort
+-}
+currentViewPort : Router route -> Maybe Viewport
+currentViewPort (Router { url, viewports }) =
+    Dict.get (Url.toString url) viewports
 
 
 {-| currentRoute

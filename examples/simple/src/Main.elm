@@ -64,6 +64,9 @@ update message ({ router } as model) =
             in
             ( { model | router = newRouter }, cmd )
 
+        UrlChanged url ->
+            ( model, Cmd.none )
+
 
 
 -- VIEW
