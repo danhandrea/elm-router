@@ -99,6 +99,10 @@ type alias Options route =
 
 
 {-| default options
+
+Always cache
+no route exceptions
+
 -}
 defaultOptions : Options route
 defaultOptions =
