@@ -23,7 +23,7 @@ type alias Model =
 
 
 type Msg
-    = Router (Router.Msg Page.Msg)
+    = RouterMsg (Router.Msg Page.Msg)
 
 
 
@@ -32,12 +32,12 @@ type Msg
 
 config : Config Msg Route Page Page.Msg
 config =
-    { parser = Route.parser
-    , init = Page.init
+    { init = Page.init
     , update = Page.update
     , view = Page.view
-    , bind = Router
     , subscriptions = Page.subscriptions
+    , msg = RouterMsg
+    , parser = Route.parser
     , notFound = Route.NotFound
     , options = Router.defaultOptions
     }
@@ -63,7 +63,7 @@ init _ url key =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update message ({ router } as model) =
     case message of
-        Router msg ->
+        RouterMsg msg ->
             let
                 ( newRouter, cmd ) =
                     Router.update config msg router
@@ -117,6 +117,6 @@ main =
         , update = update
         , view = view
         , subscriptions = subscriptions
-        , onUrlChange = Router.onUrlChange Router
-        , onUrlRequest = Router.onUrlRequest Router
+        , onUrlChange = Router.onUrlChange RouterMsg
+        , onUrlRequest = Router.onUrlRequest RouterMsg
         }
