@@ -1,6 +1,6 @@
 module Page.Contact exposing (Model, Msg, init, subscriptions, update, view)
 
-import Html as H exposing (Html)
+import Html as H
 import Html.Attributes as A
 import Html.Events as E
 import Router exposing (Layout)
