@@ -4,6 +4,7 @@ import Browser exposing (Document)
 import Browser.Navigation exposing (Key)
 import Html as H
 import Html.Attributes as A
+import Page exposing (Page)
 import Route exposing (Route)
 import Router exposing (Config, Router)
 import Url exposing (Url)
@@ -14,7 +15,7 @@ import Url exposing (Url)
 
 
 type alias Model =
-    { router : Router Route }
+    { router : Router Route Page }
 
 
 
@@ -22,24 +23,23 @@ type alias Model =
 
 
 type Msg
-    = Router (Router.Msg Route.Msg)
-    | UrlChanged Url
+    = Router (Router.Msg Page.Msg)
 
 
 
 -- ROUTER CONFIG
 
 
-config : Config Msg Route Route.Msg
+config : Config Msg Route Page Page.Msg
 config =
     { parser = Route.parser
-    , update = Route.update
-    , view = Route.view
-    , message = Router
-    , subscriptions = Route.subscriptions
-    , notFound = Route.notFound
-    , routeTitle = Route.title
-    , onUrlChanged = Just UrlChanged
+    , init = Page.init
+    , update = Page.update
+    , view = Page.view
+    , bind = Router
+    , subscriptions = Page.subscriptions
+    , notFound = Route.NotFound
+    , options = Router.defaultOptions
     }
 
 
@@ -70,9 +70,6 @@ update message ({ router } as model) =
             in
             ( { model | router = newRouter }, cmd )
 
-        UrlChanged url ->
-            ( model, Cmd.none )
-
 
 
 -- VIEW
@@ -80,7 +77,14 @@ update message ({ router } as model) =
 
 view : Model -> Document Msg
 view { router } =
-    { title = Router.title router "My app"
+    let
+        layout =
+            Router.view config router
+    in
+    { title =
+        layout.title
+            |> Maybe.map (\pageTitle -> "App - " ++ pageTitle)
+            |> Maybe.withDefault "App"
     , body =
         [ H.nav []
             [ H.a [ A.href "/" ] [ H.text "Home" ]
@@ -88,7 +92,7 @@ view { router } =
             , H.a [ A.href "/contact" ] [ H.text "Contact" ]
             , H.a [ A.href "/something_not_routed" ] [ H.text "404" ]
             ]
-        , H.main_ [] (Router.view config router)
+        , H.main_ layout.attrs layout.main
         ]
     }
 
@@ -113,6 +117,6 @@ main =
         , update = update
         , view = view
         , subscriptions = subscriptions
-        , onUrlChange = Router.onUrlChange config
-        , onUrlRequest = Router.onUrlRequest config
+        , onUrlChange = Router.onUrlChange Router
+        , onUrlRequest = Router.onUrlRequest Router
         }

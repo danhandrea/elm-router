@@ -1,10 +1,12 @@
 module Page.About exposing (view)
 
-import Html as H exposing (Html)
+import Html as H
+import Router exposing (Layout)
 
 
-view : List (Html msg)
+view : Layout msg
 view =
-    [ H.h1 [] [ H.text "About" ]
-    , H.section [] [ H.text "about page" ]
-    ]
+    { title = Just "About"
+    , attrs = []
+    , main = [ H.section [] [ H.text "about page" ] ]
+    }

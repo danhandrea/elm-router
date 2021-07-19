@@ -1,400 +1,443 @@
 module Router exposing
-    ( Router, Config, Msg
-    , onUrlChange, onUrlRequest, title
-    , init
-    , update
-    , view
-    , subscriptions
-    , mapMsg, mapRoute, mapUpdate
-    , currentUrl, currentRoute, currentViewPort
+    ( Config
+    , Options, CachePages(..), defaultOptions
+    , Router, Msg
+    , Layout
+    , init, update, view, subscriptions
+    , onUrlChange, onUrlRequest
+    , mapUpdate, mapView
+    , url, route, page, viewport, base
+    , redirect, reload
     )
 
-{-| Router
+{-|
 
-Manages elm routing pages
-
-
-# Router, Config, Msg
-
-@docs Router, Config, Msg
+    Router
 
 
-# Application
+# Config
 
-@docs onUrlChange, onUrlRequest, title
-
-
-# init
-
-@docs init
+@docs Config
 
 
-# update
+# Options
 
-@docs update
-
-
-# view
-
-@docs view
+@docs Options, CachePages, defaultOptions
 
 
-# subscriptions
+# Router Msg
 
-@docs subscriptions
+@docs Router, Msg
 
 
-# mapping
+# Layout
 
-@docs mapMsg, mapRoute, mapUpdate
+@docs Layout
+
+
+# Basic
+
+@docs init, update, view, subscriptions
+
+
+# App url
+
+@docs onUrlChange, onUrlRequest
+
+
+# Map
+
+@docs mapUpdate, mapView
 
 
 # Query
 
-@docs currentUrl, currentRoute, currentViewPort
+@docs url, route, page, viewport, base
+
+
+# Navigation
+
+@docs redirect, reload
 
 -}
 
 import Browser exposing (UrlRequest(..))
 import Browser.Dom as Dom exposing (Viewport)
-import Browser.Navigation as Navigation exposing (Key)
+import Browser.Navigation as Nav exposing (Key)
 import Dict exposing (Dict)
-import Html as H exposing (Html)
+import Html as H exposing (Attribute, Html)
+import Html.Attributes as A
 import Task
 import Url exposing (Url)
-import Url.Parser as Parser exposing (Parser)
-
-
-
--- ALIASES
-
-
-type alias Routes route =
-    Dict String route
-
-
-type alias Viewports =
-    Dict String Viewport
-
-
-
--- MODEL
-
-
-{-| Router
--}
-type Router route
-    = Router
-        { url : Url
-        , key : Key
-        , pageTitle : Maybe String
-        , viewports : Viewports
-        , routes : Routes route
-        }
-
-
-
--- MSG
-
-
-{-| Msg
--}
-type Msg routeMsg
-    = UrlChanged Url
-    | UrlRequest UrlRequest
-    | Route routeMsg
-    | Sub String routeMsg
-    | GrabViewport Url Viewport
-    | NoOp
-
-
-
--- CONFIG
+import Url.Parser as P exposing (Parser)
 
 
 {-| Config
 -}
-type alias Config msg route routeMsg =
-    { parser : Parser (route -> route) route
-    , update : routeMsg -> ( route, Cmd routeMsg )
-    , view : route -> List (Html routeMsg)
-    , message : Msg routeMsg -> msg
-    , subscriptions : route -> Sub routeMsg
-    , notFound : Url -> List (Html msg)
-    , routeTitle : route -> Maybe String
-    , onUrlChanged : Maybe (Url -> msg)
+type alias Config msg route page pageMsg =
+    { bind : Msg pageMsg -> msg
+    , parser : Parser (route -> route) route
+    , notFound : Url -> route
+    , init : route -> ( page, Cmd pageMsg )
+    , update : pageMsg -> page -> ( page, Cmd pageMsg )
+    , view : page -> Layout pageMsg
+    , subscriptions : page -> Sub pageMsg
+    , options : Options route
     }
 
 
-
--- INIT
-
-
-notFoundTitle : Maybe String
-notFoundTitle =
-    Just "Not found!"
-
-
-{-| Init
+{-| Router options
 -}
-init : Config msg route routeMsg -> Url -> Key -> ( Router route, Cmd msg )
-init { parser, routeTitle, message } url key =
+type alias Options route =
+    { cachePages : CachePages route
+    , exceptions : List String
+    }
+
+
+{-| default options
+-}
+defaultOptions : Options route
+defaultOptions =
+    Options AlwaysCache []
+
+
+{-| Cache rules
+-}
+type CachePages route
+    = AlwaysCache
+    | NeverCache
+    | CustomCache (route -> Bool)
+
+
+{-| Layout
+
+    `attrs` will be applied to a `Html.main` whose content is `main`
+
+-}
+type alias Layout msg =
+    { title : Maybe String
+    , attrs : List (Attribute msg)
+    , main : List (Html msg)
+    }
+
+
+{-| Router
+-}
+type Router route page
+    = Router
+        { url : Url
+        , key : Key
+        , base_ : Url
+        , route : route
+        , pages : Dict String page
+        , viewports : Dict String Viewport
+        }
+
+
+{-| init
+-}
+init : Config msg route page pageMsg -> Url -> Key -> ( Router route page, Cmd msg )
+init config initialUrl key_ =
     let
-        empty =
-            { url = url
-            , key = key
-            , pageTitle = Nothing
-            , viewports = Dict.empty
-            , routes = Dict.empty
-            }
+        base_ =
+            { initialUrl | query = Nothing, fragment = Nothing, path = "/" }
+
+        ( initialRoute, initialPage, cmd ) =
+            urlChanged config.parser initialUrl config.init config.notFound config.bind
+
+        pages =
+            Dict.singleton
+                (Url.toString initialUrl)
+                initialPage
+
+        viewports =
+            Dict.empty
 
         grabViewport =
-            Task.perform (GrabViewport url >> message) Dom.getViewport
+            Task.perform (GrabViewport initialUrl False >> config.bind) Dom.getViewport
     in
-    case Parser.parse parser url of
-        Nothing ->
-            ( Router { empty | pageTitle = notFoundTitle }, grabViewport )
-
-        Just route ->
-            ( Router
-                { empty
-                    | routes = Dict.singleton (Url.toString url) route
-                    , pageTitle = routeTitle route
-                }
-            , grabViewport
-            )
+    ( Router
+        { url = initialUrl
+        , key = key_
+        , base_ = base_
+        , route = initialRoute
+        , pages = pages
+        , viewports = viewports
+        }
+    , Cmd.batch [ cmd, grabViewport ]
+    )
 
 
+urlChanged :
+    Parser (route -> route) route
+    -> Url
+    -> (route -> ( page, Cmd pageMsg ))
+    -> (Url -> route)
+    -> (Msg pageMsg -> msg)
+    -> ( route, page, Cmd msg )
+urlChanged parser nextUrl routeInit notFoundRoute bind =
+    let
+        newRoute =
+            P.parse parser nextUrl
+                |> Maybe.withDefault (notFoundRoute nextUrl)
 
--- UPDATE
+        ( newPage, cmd ) =
+            routeInit newRoute
+    in
+    ( newRoute, newPage, Cmd.map (bind << Page) cmd )
+
+
+{-| Msg
+-}
+type Msg pageMsg
+    = Page pageMsg
+    | UrlRequest UrlRequest
+    | UrlChanged Url
+    | SetViewport ()
+    | Subscription String pageMsg
+    | GrabViewport Url Bool Viewport
 
 
 {-| update
 -}
-update : Config msg route routeMsg -> Msg routeMsg -> Router route -> ( Router route, Cmd msg )
-update config message (Router router) =
+update : Config msg route page pageMsg -> Msg pageMsg -> Router route page -> ( Router route page, Cmd msg )
+update config message (Router ({ pages } as router)) =
     case message of
         UrlRequest request ->
             case request of
-                Internal newUrl ->
-                    ( Router router
-                    , Task.perform (GrabViewport newUrl >> config.message) Dom.getViewport
-                    )
+                Internal ({ path } as urlRequested) ->
+                    if List.member path config.options.exceptions then
+                        ( Router router, Nav.load <| Url.toString urlRequested )
 
-                External newUrl ->
-                    ( Router router
-                    , Navigation.load newUrl
-                    )
+                    else
+                        ( Router router
+                        , Task.perform (GrabViewport urlRequested True >> config.bind) Dom.getViewport
+                        )
 
-        UrlChanged newUrl ->
+                External urlRequested ->
+                    ( Router router, Nav.load urlRequested )
+
+        GrabViewport viewportUrl push grabbedViewport ->
             let
-                ( route, routes ) =
-                    change config newUrl router.routes
+                viewports =
+                    if Dict.member (Url.toString router.url) router.viewports then
+                        Dict.update (Url.toString router.url) (\_ -> Just grabbedViewport) router.viewports
+
+                    else
+                        Dict.insert (Url.toString router.url) grabbedViewport router.viewports
 
                 cmd =
-                    case Dict.get (Url.toString newUrl) router.viewports of
-                        Just vp ->
-                            Task.perform (\_ -> config.message NoOp) (Dom.setViewport vp.viewport.x vp.viewport.y)
+                    if push then
+                        Nav.pushUrl router.key (Url.toString viewportUrl)
 
-                        Nothing ->
-                            Cmd.none
-
-                notifyUrlChanged =
-                    case config.onUrlChanged of
-                        Just method ->
-                            Task.succeed (method newUrl) |> Task.perform identity
-
-                        Nothing ->
-                            Cmd.none
+                    else
+                        Cmd.none
             in
-            ( Router
-                { router
-                    | url = newUrl
-                    , routes = routes
-                    , pageTitle = Maybe.withDefault notFoundTitle <| Maybe.map config.routeTitle route
-                }
-            , Cmd.batch [ cmd, notifyUrlChanged ]
-            )
+            ( Router { router | viewports = viewports }, cmd )
 
-        GrabViewport url viewport ->
-            ( Router
-                { router
-                    | viewports =
-                        if Dict.member (Url.toString router.url) router.viewports then
-                            Dict.update (Url.toString router.url) (\_ -> Just viewport) router.viewports
+        UrlChanged nextUrl ->
+            let
+                setViewportCmd =
+                    Dict.get (Url.toString nextUrl) router.viewports
+                        |> Maybe.map (\vp -> Task.perform (config.bind << SetViewport) (Dom.setViewport vp.viewport.x vp.viewport.y))
+                        |> Maybe.withDefault Cmd.none
+
+                newRoute =
+                    P.parse config.parser nextUrl
+                        |> Maybe.withDefault (config.notFound nextUrl)
+
+                shouldCachePage =
+                    case config.options.cachePages of
+                        AlwaysCache ->
+                            True
+
+                        NeverCache ->
+                            False
+
+                        CustomCache f ->
+                            f newRoute
+
+                ( newPages, pageCommands ) =
+                    if Dict.member (Url.toString nextUrl) pages then
+                        if not shouldCachePage then
+                            let
+                                ( newPage, pageCmd ) =
+                                    config.init newRoute
+                                        |> Tuple.mapSecond (Cmd.map (config.bind << Page))
+                            in
+                            ( Dict.update (Url.toString nextUrl) (\_ -> Just newPage) pages, pageCmd )
 
                         else
-                            Dict.insert (Url.toString router.url) viewport router.viewports
-                }
-            , Navigation.pushUrl router.key (Url.toString url)
-            )
+                            ( pages, Cmd.none )
 
-        Route msg ->
-            let
-                ( route, cmd ) =
-                    config.update msg
+                    else
+                        let
+                            ( newPage, pageCmd ) =
+                                config.init newRoute
+                                    |> Tuple.mapSecond (Cmd.map (config.bind << Page))
+                        in
+                        ( Dict.insert (Url.toString nextUrl) newPage pages, pageCmd )
             in
-            ( Router
-                { router
-                    | routes =
-                        Dict.update (Url.toString router.url)
-                            (Maybe.map (\_ -> route))
-                            router.routes
-                }
-            , Cmd.map (Route >> config.message) cmd
-            )
+            ( Router { router | route = newRoute, pages = newPages, url = nextUrl }, Cmd.batch [ pageCommands, setViewportCmd ] )
 
-        Sub url msg ->
-            let
-                ( route, cmd ) =
-                    config.update msg
-            in
-            ( Router
-                { router
-                    | routes =
-                        Dict.update url
-                            (Maybe.map (\_ -> route))
-                            router.routes
-                }
-            , Cmd.map (Route >> config.message) cmd
-            )
+        Page msg ->
+            case Dict.get (Url.toString router.url) pages of
+                Just currentPage ->
+                    let
+                        ( newPage, cmd ) =
+                            config.update msg currentPage
 
-        NoOp ->
+                        newPages =
+                            Dict.update (Url.toString router.url) (\_ -> Just newPage) pages
+                    in
+                    ( Router { router | pages = newPages }, Cmd.map (config.bind << Page) cmd )
+
+                _ ->
+                    ( Router router, Cmd.none )
+
+        Subscription subscriptionUrl msg ->
+            case Dict.get subscriptionUrl pages of
+                Just currentPage ->
+                    let
+                        ( newPage, cmd ) =
+                            config.update msg currentPage
+
+                        newPages =
+                            Dict.update subscriptionUrl (\_ -> Just newPage) pages
+                    in
+                    ( Router { router | pages = newPages }, Cmd.map (config.bind << Page) cmd )
+
+                _ ->
+                    ( Router router, Cmd.none )
+
+        SetViewport _ ->
             ( Router router, Cmd.none )
-
-
-
--- CHANGE
-
-
-{-| change
--}
-change : Config msg route routeMsg -> Url -> Routes route -> ( Maybe route, Routes route )
-change { parser } url routes =
-    case Parser.parse parser url of
-        Nothing ->
-            ( Nothing, routes )
-
-        Just route ->
-            let
-                urlString =
-                    Url.toString url
-            in
-            if Dict.member urlString routes then
-                ( Just route, routes )
-
-            else
-                ( Just route, Dict.insert urlString route routes )
-
-
-
--- VIEW
 
 
 {-| view
 -}
-view : Config msg route routeMsg -> Router route -> List (Html msg)
-view config (Router router) =
-    case Dict.get (Url.toString router.url) router.routes of
-        Nothing ->
-            config.notFound router.url
-
-        Just route ->
-            List.map (H.map (Route >> config.message)) (config.view route)
-
-
-
--- SUBSCRIPTIONS
+view : Config msg route page pageMsg -> Router route page -> Layout msg
+view config (Router ({ pages } as router)) =
+    Dict.get (Url.toString router.url) pages
+        |> Maybe.andThen (Just << mapView (config.bind << Page) << config.view)
+        |> Maybe.withDefault (Layout (Just "Err") [] [ H.text "horrible error" ])
 
 
 {-| subscriptions
 -}
-subscriptions : Config msg route routeMsg -> Router route -> Sub msg
-subscriptions config (Router { routes }) =
-    routes
+subscriptions : Config msg route page pageMsg -> Router route page -> Sub msg
+subscriptions config (Router { pages }) =
+    pages
         |> Dict.toList
         |> List.map
-            (\( key, route ) ->
-                Sub.map (Sub key >> config.message) (config.subscriptions route)
+            (\( key_, page_ ) ->
+                Sub.map (Subscription key_ >> config.bind) (config.subscriptions page_)
             )
         |> Sub.batch
 
 
-
--- EXPOSE MESSAGES
-
-
 {-| onUrlChange
 -}
-onUrlChange : Config msg route routeMsg -> Url -> msg
-onUrlChange config =
-    UrlChanged >> config.message
+onUrlChange : (Msg pageMsg -> msg) -> Url -> msg
+onUrlChange bind =
+    bind << UrlChanged
 
 
 {-| onUrlRequest
 -}
-onUrlRequest : Config msg route routeMsg -> UrlRequest -> msg
-onUrlRequest config =
-    UrlRequest >> config.message
+onUrlRequest : (Msg pageMsg -> msg) -> UrlRequest -> msg
+onUrlRequest bind =
+    bind << UrlRequest
 
 
-
--- GENERAL
-
-
-{-| title
+{-| base
 -}
-title : Router route -> String -> String
-title (Router { pageTitle }) appTitle =
-    case pageTitle of
-        Nothing ->
-            appTitle
-
-        Just t ->
-            appTitle ++ " - " ++ t
+base : Router route page -> Url
+base (Router router) =
+    router.base_
 
 
 {-| currentUrl
 -}
-currentUrl : Router route -> Url
-currentUrl (Router { url }) =
-    url
+url : Router route page -> Url
+url (Router router) =
+    router.url
+
+
+{-| redirect
+-}
+redirect : Config msg route page pageMsg -> Router route page -> String -> ( Router route page, Cmd msg )
+redirect config ((Router { base_ }) as router) path =
+    let
+        url_ =
+            { base_ | path = path }
+    in
+    update config (UrlRequest (Internal url_)) router
+
+
+{-| reload
+
+    This never results in a page load!
+    It will just re-init the current page
+
+-}
+reload : Config msg route page pageMsg -> Router route page -> ( Router route page, Cmd msg )
+reload config (Router r) =
+    let
+        ( updatedRoute, updatedPage, cmd ) =
+            urlChanged config.parser r.url config.init config.notFound config.bind
+
+        newPages =
+            Dict.update (Url.toString r.url) (\_ -> Just updatedPage) r.pages
+    in
+    ( Router { r | route = updatedRoute, pages = newPages }
+    , cmd
+    )
 
 
 {-| currentRoute
 -}
-currentRoute : Router route -> Maybe route
-currentRoute (Router { url, routes }) =
-    Dict.get (Url.toString url) routes
+route : Router route page -> route
+route (Router router) =
+    router.route
+
+
+{-| currentPage
+-}
+page : Router route page -> Maybe page
+page (Router ({ pages } as router)) =
+    Dict.get (Url.toString router.url) pages
 
 
 {-| currentViewPort
 -}
-currentViewPort : Router route -> Maybe Viewport
-currentViewPort (Router { url, viewports }) =
-    Dict.get (Url.toString url) viewports
+viewport : Router route page -> Maybe Viewport
+viewport (Router ({ viewports } as router)) =
+    Dict.get (Url.toString router.url) viewports
 
 
-
--- MAPPING
-
-
-{-| mapUpdate
+{-| map update
 -}
-mapUpdate : (routeModel -> routeType) -> (routeModel -> routeMsg -> msgType) -> ( routeModel, Cmd routeMsg ) -> ( routeType, Cmd msgType )
-mapUpdate modelInto msgInto ( mdl, msg ) =
-    ( modelInto mdl, Cmd.map (msgInto mdl) msg )
+mapUpdate :
+    (model -> page)
+    -> (msg -> pageMsg)
+    -> ( model, Cmd msg )
+    -> ( page, Cmd pageMsg )
+mapUpdate page_ pageMsg ( mdl, cmd ) =
+    ( page_ mdl, Cmd.map pageMsg cmd )
 
 
-{-| mapMsg
+{-| map view
 -}
-mapMsg : (routeMsg -> msgType) -> List (Html routeMsg) -> List (Html msgType)
-mapMsg msg =
-    List.map (H.map msg)
+mapView : (msgA -> msgB) -> Layout msgA -> Layout msgB
+mapView m lA =
+    let
+        mappedSections =
+            lA.main
+                |> List.map (H.map m)
 
-
-{-| mapRoute
--}
-mapRoute : Parser a routeType -> a -> Parser (routeType -> b) b
-mapRoute where_ what =
-    Parser.map what where_
+        mappedAttrs =
+            lA.attrs
+                |> List.map (A.map m)
+    in
+    Layout lA.title mappedAttrs mappedSections

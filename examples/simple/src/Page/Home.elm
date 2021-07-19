@@ -1,10 +1,12 @@
 module Page.Home exposing (view)
 
-import Html as H exposing (Html)
+import Html as H
+import Router exposing (Layout)
 
 
-view : List (Html msg)
+view : Layout msg
 view =
-    [ H.h1 [] [ H.text "Home" ]
-    , H.section [] [ H.text "home page" ]
-    ]
+    { title = Nothing
+    , attrs = []
+    , main = [ H.section [] [ H.text "home page" ] ]
+    }
