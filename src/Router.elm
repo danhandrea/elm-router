@@ -1,6 +1,6 @@
 module Router exposing
     ( Config
-    , Options, defaultOptions
+    , Options, Cache(..), defaultOptions
     , Router, Msg
     , Layout
     , init, update, view, subscriptions
@@ -8,7 +8,6 @@ module Router exposing
     , mapUpdate, mapView
     , url, route, page, viewport, base
     , redirect, reload
-    , Cache(..)
     )
 
 {-|
@@ -23,7 +22,7 @@ module Router exposing
 
 # Options
 
-@docs Options, CachePages, defaultOptions
+@docs Options, Cache, defaultOptions
 
 
 # Router Msg
@@ -76,21 +75,18 @@ import Url.Parser as P exposing (Parser)
 {-| Config
 -}
 type alias Config msg route page pageMsg =
-    { init : route -> ( page, Cmd pageMsg )
+    { bind : Msg pageMsg -> msg
+    , parser : Parser (route -> route) route
+    , notFound : Url -> route
+    , init : route -> ( page, Cmd pageMsg )
     , update : pageMsg -> page -> ( page, Cmd pageMsg )
     , view : page -> Layout pageMsg
     , subscriptions : page -> Sub pageMsg
-    , msg : Msg pageMsg -> msg
-    , parser : Parser (route -> route) route
-    , notFound : Url -> route
     , options : Options route
     }
 
 
 {-| Router options
-
-    cache : whether init is called when you return to a page
-
 -}
 type alias Options route =
     { cache : Cache route
@@ -99,10 +95,6 @@ type alias Options route =
 
 
 {-| default options
-
-Always cache
-no route exceptions
-
 -}
 defaultOptions : Options route
 defaultOptions =
@@ -151,7 +143,7 @@ init config initialUrl key_ =
             { initialUrl | query = Nothing, fragment = Nothing, path = "/" }
 
         ( initialRoute, initialPage, cmd ) =
-            urlChanged config.parser initialUrl config.init config.notFound config.msg
+            urlChanged config.parser initialUrl config.init config.notFound config.bind
 
         pages =
             Dict.singleton
@@ -162,7 +154,7 @@ init config initialUrl key_ =
             Dict.empty
 
         grabViewport =
-            Task.perform (GrabViewport initialUrl False >> config.msg) Dom.getViewport
+            Task.perform (GrabViewport initialUrl False >> config.bind) Dom.getViewport
     in
     ( Router
         { url = initialUrl
@@ -219,7 +211,7 @@ update config message (Router ({ pages } as router)) =
 
                     else
                         ( Router router
-                        , Task.perform (GrabViewport urlRequested True >> config.msg) Dom.getViewport
+                        , Task.perform (GrabViewport urlRequested True >> config.bind) Dom.getViewport
                         )
 
                 External urlRequested ->
@@ -247,7 +239,7 @@ update config message (Router ({ pages } as router)) =
             let
                 setViewportCmd =
                     Dict.get (Url.toString nextUrl) router.viewports
-                        |> Maybe.map (\vp -> Task.perform (config.msg << SetViewport) (Dom.setViewport vp.viewport.x vp.viewport.y))
+                        |> Maybe.map (\vp -> Task.perform (config.bind << SetViewport) (Dom.setViewport vp.viewport.x vp.viewport.y))
                         |> Maybe.withDefault Cmd.none
 
                 newRoute =
@@ -271,7 +263,7 @@ update config message (Router ({ pages } as router)) =
                             let
                                 ( newPage, pageCmd ) =
                                     config.init newRoute
-                                        |> Tuple.mapSecond (Cmd.map (config.msg << Page))
+                                        |> Tuple.mapSecond (Cmd.map (config.bind << Page))
                             in
                             ( Dict.update (Url.toString nextUrl) (\_ -> Just newPage) pages, pageCmd )
 
@@ -282,7 +274,7 @@ update config message (Router ({ pages } as router)) =
                         let
                             ( newPage, pageCmd ) =
                                 config.init newRoute
-                                    |> Tuple.mapSecond (Cmd.map (config.msg << Page))
+                                    |> Tuple.mapSecond (Cmd.map (config.bind << Page))
                         in
                         ( Dict.insert (Url.toString nextUrl) newPage pages, pageCmd )
             in
@@ -298,7 +290,7 @@ update config message (Router ({ pages } as router)) =
                         newPages =
                             Dict.update (Url.toString router.url) (\_ -> Just newPage) pages
                     in
-                    ( Router { router | pages = newPages }, Cmd.map (config.msg << Page) cmd )
+                    ( Router { router | pages = newPages }, Cmd.map (config.bind << Page) cmd )
 
                 _ ->
                     ( Router router, Cmd.none )
@@ -313,7 +305,7 @@ update config message (Router ({ pages } as router)) =
                         newPages =
                             Dict.update subscriptionUrl (\_ -> Just newPage) pages
                     in
-                    ( Router { router | pages = newPages }, Cmd.map (config.msg << Page) cmd )
+                    ( Router { router | pages = newPages }, Cmd.map (config.bind << Page) cmd )
 
                 _ ->
                     ( Router router, Cmd.none )
@@ -327,7 +319,7 @@ update config message (Router ({ pages } as router)) =
 view : Config msg route page pageMsg -> Router route page -> Layout msg
 view config (Router ({ pages } as router)) =
     Dict.get (Url.toString router.url) pages
-        |> Maybe.andThen (Just << mapView (config.msg << Page) << config.view)
+        |> Maybe.andThen (Just << mapView (config.bind << Page) << config.view)
         |> Maybe.withDefault (Layout (Just "Err") [] [ H.text "horrible error" ])
 
 
@@ -339,7 +331,7 @@ subscriptions config (Router { pages }) =
         |> Dict.toList
         |> List.map
             (\( key_, page_ ) ->
-                Sub.map (Subscription key_ >> config.msg) (config.subscriptions page_)
+                Sub.map (Subscription key_ >> config.bind) (config.subscriptions page_)
             )
         |> Sub.batch
 
@@ -393,7 +385,7 @@ reload : Config msg route page pageMsg -> Router route page -> ( Router route pa
 reload config (Router r) =
     let
         ( updatedRoute, updatedPage, cmd ) =
-            urlChanged config.parser r.url config.init config.notFound config.msg
+            urlChanged config.parser r.url config.init config.notFound config.bind
 
         newPages =
             Dict.update (Url.toString r.url) (\_ -> Just updatedPage) r.pages

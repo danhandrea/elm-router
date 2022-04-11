@@ -17,8 +17,8 @@ This library helps with routing in elm [applications](https://package.elm-lang.o
 - 2.0.0
   - Added onUrlChanged to config so you will be notified if the url has changed (optional)
   - Modified init so it will grab viewport
-
-## To do
+- 3.0.0
+  - Brought back init (not sure what I was thinking)
 
 ## Notes
 
