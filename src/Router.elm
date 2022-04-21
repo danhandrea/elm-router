@@ -8,6 +8,7 @@ module Router exposing
     , mapUpdate, mapView
     , url, route, page, viewport, base
     , redirect, reload
+    , Event(..)
     )
 
 {-|
@@ -59,6 +60,11 @@ module Router exposing
 
 @docs redirect, reload
 
+
+# Events
+
+@docs Event
+
 -}
 
 import Browser exposing (UrlRequest(..))
@@ -67,12 +73,38 @@ import Browser.Navigation as Nav exposing (Key)
 import Dict exposing (Dict)
 import Html as H exposing (Attribute, Html)
 import Html.Attributes as A
+import Process
 import Task
 import Url exposing (Url)
 import Url.Parser as P exposing (Parser)
 
 
 {-| Config
+
+    bind
+        Your router Msg eg `RouterMsg (Router.Msg Page.Msg)`
+
+    parser
+        Your `Route` parser
+
+    notFound
+        Your not found `Route`
+
+    init
+        Your `Page` init
+
+    update
+        Your `Page` update
+
+    view
+        Your `Page` view
+
+    subscriptions
+        Your `Page` subscriptions
+
+    options
+        `Router` options
+
 -}
 type alias Config msg route page pageMsg =
     { bind : Msg pageMsg -> msg
@@ -82,23 +114,58 @@ type alias Config msg route page pageMsg =
     , update : pageMsg -> page -> ( page, Cmd pageMsg )
     , view : page -> Layout pageMsg
     , subscriptions : page -> Sub pageMsg
-    , options : Options route
+    , options : Options route msg
     }
 
 
 {-| Router options
+
+    cache
+        cache strategy
+
+    cacheExceptions
+        paths to ignore caching for, useful for pages like login
+        where you don't want the inputs to remain filled.
+
+    navigation delay
+        add delay to navigation so you can animate page transitions
+
+    onEvent
+        receive notifications for Router events
+
 -}
-type alias Options route =
+type alias Options route msg =
     { cache : Cache route
-    , exceptions : List String
+    , cacheExceptions : List String
+    , navigationDelay : Maybe Float
+    , onEvent : Maybe (Event -> msg)
     }
 
 
-{-| default options
+{-| Event
+
+    Basic router events
+
 -}
-defaultOptions : Options route
+type Event
+    = UrlRequested Url
+    | UrlChanged Url
+
+
+{-| default options
+
+    Always use cache
+
+    No exceptions
+
+    No navigation delay
+
+    No events
+
+-}
+defaultOptions : Options route msg
 defaultOptions =
-    Options Always []
+    Options Always [] Nothing Nothing
 
 
 {-| Cache rules
@@ -111,7 +178,14 @@ type Cache route
 
 {-| Layout
 
-    `attrs` will be applied to a `Html.main` whose content is `main`
+    title
+        Set a title for each page.
+
+    attrs
+        Attributes that will be set on the container.
+
+    main
+        Html content to be set inside the container.
 
 -}
 type alias Layout msg =
@@ -142,7 +216,7 @@ init config initialUrl key_ =
         base_ =
             { initialUrl | query = Nothing, fragment = Nothing, path = "/" }
 
-        ( initialRoute, initialPage, cmd ) =
+        ( initialRoute, initialPage, initialPageCmd ) =
             urlChanged config.parser initialUrl config.init config.notFound config.bind
 
         pages =
@@ -164,7 +238,7 @@ init config initialUrl key_ =
         , pages = pages
         , viewports = viewports
         }
-    , Cmd.batch [ cmd, grabViewport ]
+    , Cmd.batch [ initialPageCmd, grabViewport ]
     )
 
 
@@ -181,10 +255,10 @@ urlChanged parser nextUrl routeInit notFoundRoute bind =
             P.parse parser nextUrl
                 |> Maybe.withDefault (notFoundRoute nextUrl)
 
-        ( newPage, cmd ) =
+        ( newPage, newPageCmd ) =
             routeInit newRoute
     in
-    ( newRoute, newPage, Cmd.map (bind << Page) cmd )
+    ( newRoute, newPage, Cmd.map (bind << Page) newPageCmd )
 
 
 {-| Msg
@@ -192,10 +266,11 @@ urlChanged parser nextUrl routeInit notFoundRoute bind =
 type Msg pageMsg
     = Page pageMsg
     | UrlRequest UrlRequest
-    | UrlChanged Url
+    | UrlChange Url
     | SetViewport ()
     | Subscription String pageMsg
     | GrabViewport Url Bool Viewport
+    | DelayedNavigationTo Url
 
 
 {-| update
@@ -206,7 +281,7 @@ update config message (Router ({ pages } as router)) =
         UrlRequest request ->
             case request of
                 Internal ({ path } as urlRequested) ->
-                    if List.member path config.options.exceptions then
+                    if List.member path config.options.cacheExceptions then
                         ( Router router, Nav.load <| Url.toString urlRequested )
 
                     else
@@ -226,16 +301,28 @@ update config message (Router ({ pages } as router)) =
                     else
                         Dict.insert (Url.toString router.url) grabbedViewport router.viewports
 
-                cmd =
+                ( navigationCommand, eventCommand ) =
                     if push then
-                        Nav.pushUrl router.key (Url.toString viewportUrl)
+                        let
+                            navCmd =
+                                case config.options.navigationDelay of
+                                    Just time ->
+                                        delay time ((DelayedNavigationTo >> config.bind) viewportUrl)
+
+                                    Nothing ->
+                                        Nav.pushUrl router.key (Url.toString viewportUrl)
+                        in
+                        ( navCmd, trigger config.options.onEvent <| UrlRequested viewportUrl )
 
                     else
-                        Cmd.none
+                        ( Cmd.none, Cmd.none )
             in
-            ( Router { router | viewports = viewports }, cmd )
+            ( Router { router | viewports = viewports }, Cmd.batch [ navigationCommand, eventCommand ] )
 
-        UrlChanged nextUrl ->
+        DelayedNavigationTo navUrl ->
+            ( Router router, Nav.pushUrl router.key (Url.toString navUrl) )
+
+        UrlChange nextUrl ->
             let
                 setViewportCmd =
                     Dict.get (Url.toString nextUrl) router.viewports
@@ -277,8 +364,11 @@ update config message (Router ({ pages } as router)) =
                                     |> Tuple.mapSecond (Cmd.map (config.bind << Page))
                         in
                         ( Dict.insert (Url.toString nextUrl) newPage pages, pageCmd )
+
+                eventCmd =
+                    trigger config.options.onEvent <| UrlChanged nextUrl
             in
-            ( Router { router | route = newRoute, pages = newPages, url = nextUrl }, Cmd.batch [ pageCommands, setViewportCmd ] )
+            ( Router { router | route = newRoute, pages = newPages, url = nextUrl }, Cmd.batch [ pageCommands, setViewportCmd, eventCmd ] )
 
         Page msg ->
             case Dict.get (Url.toString router.url) pages of
@@ -340,7 +430,7 @@ subscriptions config (Router { pages }) =
 -}
 onUrlChange : (Msg pageMsg -> msg) -> Url -> msg
 onUrlChange bind =
-    bind << UrlChanged
+    bind << UrlChange
 
 
 {-| onUrlRequest
@@ -441,3 +531,20 @@ mapView m lA =
                 |> List.map (A.map m)
     in
     Layout lA.title mappedAttrs mappedSections
+
+
+delay : Float -> a -> Cmd a
+delay time msg =
+    Process.sleep time
+        |> Task.andThen (always <| Task.succeed msg)
+        |> Task.perform identity
+
+
+trigger : Maybe (b -> a) -> b -> Cmd a
+trigger mEvent msg =
+    case mEvent of
+        Just ev ->
+            Task.succeed (ev msg) |> Task.perform identity
+
+        Nothing ->
+            Cmd.none

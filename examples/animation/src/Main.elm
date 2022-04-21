@@ -6,7 +6,7 @@ import Html as H
 import Html.Attributes as A
 import Page exposing (Page)
 import Route exposing (Route)
-import Router exposing (Config, Router)
+import Router exposing (Config, Options, Router)
 import Url exposing (Url)
 
 
@@ -15,7 +15,9 @@ import Url exposing (Url)
 
 
 type alias Model =
-    { router : Router Route Page }
+    { router : Router Route Page
+    , transition : Bool
+    }
 
 
 
@@ -24,6 +26,7 @@ type alias Model =
 
 type Msg
     = RouterMsg (Router.Msg Page.Msg)
+    | RouterEvent Router.Event
 
 
 
@@ -39,7 +42,7 @@ config =
     , bind = RouterMsg
     , parser = Route.parser
     , notFound = Route.NotFound
-    , options = Router.defaultOptions
+    , options = Options Router.Always [] (Just 200.0) (Just RouterEvent)
     }
 
 
@@ -53,7 +56,7 @@ init _ url key =
         ( router, cmd ) =
             Router.init config url key
     in
-    ( Model router, cmd )
+    ( Model router False, cmd )
 
 
 
@@ -70,21 +73,33 @@ update message ({ router } as model) =
             in
             ( { model | router = newRouter }, cmd )
 
+        RouterEvent ev ->
+            let
+                transition =
+                    case ev of
+                        Router.UrlRequested _ ->
+                            True
+
+                        Router.UrlChanged _ ->
+                            False
+            in
+            ( { model | transition = transition }, Cmd.none )
+
 
 
 -- VIEW
 
 
 view : Model -> Document Msg
-view { router } =
+view { router, transition } =
     let
         layout =
             Router.view config router
     in
     { title =
         layout.title
-            |> Maybe.map (\pageTitle -> "Simple - " ++ pageTitle)
-            |> Maybe.withDefault "Simple"
+            |> Maybe.map (\pageTitle -> "Animation - " ++ pageTitle)
+            |> Maybe.withDefault "Animation"
     , body =
         [ H.nav []
             [ H.a [ A.href "/" ] [ H.text "Home" ]
@@ -92,7 +107,7 @@ view { router } =
             , H.a [ A.href "/contact" ] [ H.text "Contact" ]
             , H.a [ A.href "/something_not_routed" ] [ H.text "404" ]
             ]
-        , H.main_ layout.attrs layout.main
+        , H.main_ (A.classList [ ( "pageOut", transition ), ( "pageIn", not transition ) ] :: layout.attrs) layout.main
         ]
     }
 
