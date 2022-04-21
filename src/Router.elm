@@ -81,29 +81,29 @@ import Url.Parser as P exposing (Parser)
 
 {-| Config
 
-    bind
-        Your router Msg eg `RouterMsg (Router.Msg Page.Msg)`
+bind
+Your router Msg eg `RouterMsg (Router.Msg Page.Msg)`
 
-    parser
-        Your `Route` parser
+parser
+Your `Route` parser
 
-    notFound
-        Your not found `Route`
+notFound
+Your not found `Route`
 
-    init
-        Your `Page` init
+init
+Your `Page` init
 
-    update
-        Your `Page` update
+update
+Your `Page` update
 
-    view
-        Your `Page` view
+view
+Your `Page` view
 
-    subscriptions
-        Your `Page` subscriptions
+subscriptions
+Your `Page` subscriptions
 
-    options
-        `Router` options
+options
+`Router` options
 
 -}
 type alias Config msg route page pageMsg =
@@ -120,18 +120,18 @@ type alias Config msg route page pageMsg =
 
 {-| Router options
 
-    cache
-        cache strategy
+cache
+cache strategy
 
-    cacheExceptions
-        paths to ignore caching for, useful for pages like login
-        where you don't want the inputs to remain filled.
+cacheExceptions
+paths to ignore caching for, useful for pages like login
+where you don't want the inputs to remain filled.
 
-    navigation delay
-        add delay to navigation so you can animate page transitions
+navigation delay
+add delay to navigation so you can animate page transitions
 
-    onEvent
-        receive notifications for Router events
+onEvent
+receive notifications for Router events
 
 -}
 type alias Options route msg =
@@ -144,7 +144,7 @@ type alias Options route msg =
 
 {-| Event
 
-    Basic router events
+Basic router events
 
 -}
 type Event
@@ -154,13 +154,13 @@ type Event
 
 {-| default options
 
-    Always use cache
+Always use cache
 
-    No exceptions
+No exceptions
 
-    No navigation delay
+No navigation delay
 
-    No events
+No events
 
 -}
 defaultOptions : Options route msg
@@ -178,14 +178,14 @@ type Cache route
 
 {-| Layout
 
-    title
-        Set a title for each page.
+title
+Set a title for each page.
 
-    attrs
-        Attributes that will be set on the container.
+attrs
+Attributes that will be set on the container.
 
-    main
-        Html content to be set inside the container.
+main
+Html content to be set inside the container.
 
 -}
 type alias Layout msg =
@@ -467,8 +467,8 @@ redirect config ((Router { base_ }) as router) path =
 
 {-| reload
 
-    This never results in a page load!
-    It will just re-init the current page
+This never results in a page load!
+It will just re-init the current page
 
 -}
 reload : Config msg route page pageMsg -> Router route page -> ( Router route page, Cmd msg )
