@@ -4,10 +4,13 @@ This library helps with routing in elm [applications](https://package.elm-lang.o
 
 ## Features
 
-- Maintain state of all opened pages
+- Maintain state of all opened pages (optional, custom)
 - Remember [Viewport](https://package.elm-lang.org/packages/elm/browser/latest/Browser-Dom#Viewport) of opened pages. (scroll position)
 - Manage page init, update, view
 - Manage page subscriptions individually (subscriptions from previously opened pages will run in background)
+- Optional navigation delay, so you can add css animations for page transitions
+- Subscribe to notifications for UrlRequested and UrlChanged
+
 
 ## Change log
 
@@ -19,6 +22,11 @@ This library helps with routing in elm [applications](https://package.elm-lang.o
   - Modified init so it will grab viewport
 - 3.0.0
   - Brought back init (not sure what I was thinking)
+- 4.0.0
+  - Refactor some names
+  - Add navigation delay
+  - Add animaiton example
+  - Add router events
 
 ## Notes
 
