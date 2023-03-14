@@ -7,7 +7,7 @@ module Router exposing
     , onUrlChange, onUrlRequest
     , mapUpdate, mapView
     , url, route, page, viewport, base
-    , redirect, reload
+    , redirect, reload, replaceUrl
     , Event(..)
     )
 
@@ -58,7 +58,7 @@ module Router exposing
 
 # Navigation
 
-@docs redirect, reload
+@docs redirect, reload, replaceUrl
 
 
 # Events
@@ -228,7 +228,7 @@ init config initialUrl key_ =
             Dict.empty
 
         grabViewport =
-            Task.perform (GrabViewport initialUrl False >> config.bind) Dom.getViewport
+            Task.perform (GrabViewport initialUrl False Push >> config.bind) Dom.getViewport
     in
     ( Router
         { url = initialUrl
@@ -265,12 +265,17 @@ urlChanged parser nextUrl routeInit notFoundRoute bind =
 -}
 type Msg pageMsg
     = Page pageMsg
-    | UrlRequest UrlRequest
+    | UrlRequest NavigationMode UrlRequest
     | UrlChange Url
     | SetViewport ()
     | Subscription String pageMsg
-    | GrabViewport Url Bool Viewport
-    | DelayedNavigationTo Url
+    | GrabViewport Url Bool NavigationMode Viewport
+    | DelayedNavigationTo Url NavigationMode
+
+
+type NavigationMode
+    = Push
+    | Replace
 
 
 {-| update
@@ -278,7 +283,7 @@ type Msg pageMsg
 update : Config msg route page pageMsg -> Msg pageMsg -> Router route page -> ( Router route page, Cmd msg )
 update config message (Router ({ pages } as router)) =
     case message of
-        UrlRequest request ->
+        UrlRequest navigationMode request ->
             case request of
                 Internal ({ path } as urlRequested) ->
                     if List.member path config.options.cacheExceptions then
@@ -286,13 +291,13 @@ update config message (Router ({ pages } as router)) =
 
                     else
                         ( Router router
-                        , Task.perform (GrabViewport urlRequested True >> config.bind) Dom.getViewport
+                        , Task.perform (GrabViewport urlRequested True navigationMode >> config.bind) Dom.getViewport
                         )
 
                 External urlRequested ->
                     ( Router router, Nav.load urlRequested )
 
-        GrabViewport viewportUrl push grabbedViewport ->
+        GrabViewport viewportUrl push navigationMode grabbedViewport ->
             let
                 viewports =
                     if Dict.member (Url.toString router.url) router.viewports then
@@ -307,7 +312,7 @@ update config message (Router ({ pages } as router)) =
                             navCmd =
                                 case config.options.navigationDelay of
                                     Just time ->
-                                        delay time ((DelayedNavigationTo >> config.bind) viewportUrl)
+                                        delay time (DelayedNavigationTo viewportUrl navigationMode |> config.bind)
 
                                     Nothing ->
                                         Nav.pushUrl router.key (Url.toString viewportUrl)
@@ -319,8 +324,13 @@ update config message (Router ({ pages } as router)) =
             in
             ( Router { router | viewports = viewports }, Cmd.batch [ navigationCommand, eventCommand ] )
 
-        DelayedNavigationTo navUrl ->
-            ( Router router, Nav.pushUrl router.key (Url.toString navUrl) )
+        DelayedNavigationTo navUrl navigationMode ->
+            case navigationMode of
+                Push ->
+                    ( Router router, Nav.pushUrl router.key (Url.toString navUrl) )
+
+                Replace ->
+                    ( Router router, Nav.replaceUrl router.key (Url.toString navUrl) )
 
         UrlChange nextUrl ->
             let
@@ -437,7 +447,7 @@ onUrlChange bind =
 -}
 onUrlRequest : (Msg pageMsg -> msg) -> UrlRequest -> msg
 onUrlRequest bind =
-    bind << UrlRequest
+    UrlRequest Push >> bind
 
 
 {-| base
@@ -462,7 +472,21 @@ redirect config ((Router { base_ }) as router) path =
         url_ =
             { base_ | path = path }
     in
-    update config (UrlRequest (Internal url_)) router
+    update config (UrlRequest Push (Internal url_)) router
+
+
+{-| replaceUrl
+
+    Same as redirect but uses `Browser.Navigation` replaceUrl
+
+-}
+replaceUrl : Config msg route page pageMsg -> Router route page -> String -> ( Router route page, Cmd msg )
+replaceUrl config ((Router { base_ }) as router) path =
+    let
+        url_ =
+            { base_ | path = path }
+    in
+    update config (UrlRequest Replace (Internal url_)) router
 
 
 {-| reload

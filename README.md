@@ -27,6 +27,8 @@ This library helps with routing in elm [applications](https://package.elm-lang.o
   - Add navigation delay
   - Add animaiton example
   - Add router events
+- 4.1.0
+  - add replaceUrl method
 
 ## Notes
 
