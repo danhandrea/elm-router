@@ -32,7 +32,11 @@ This library helps with routing in elm [applications](https://package.elm-lang.o
 
 - 4.2.0
   - Added:
-    - key : Router.Router route page -> Browser.Navigation.Key (might break stuff if used)
+    - key
+
+- 4.3.0
+  - Added:
+    - external
 
 ## Notes
 

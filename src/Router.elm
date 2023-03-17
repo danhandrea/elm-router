@@ -7,7 +7,7 @@ module Router exposing
     , onUrlChange, onUrlRequest
     , mapUpdate, mapView
     , url, route, page, viewport, base, key
-    , redirect, reload, replaceUrl
+    , redirect, reload, replaceUrl, external
     , Event(..)
     )
 
@@ -58,7 +58,7 @@ module Router exposing
 
 # Navigation
 
-@docs redirect, reload, replaceUrl
+@docs redirect, reload, replaceUrl, external
 
 
 # Events
@@ -507,6 +507,16 @@ reload config (Router r) =
     ( Router { r | route = updatedRoute, pages = newPages }
     , cmd
     )
+
+
+{-| external
+
+Same as redirect exept is an external link
+
+-}
+external : Config msg route page pageMsg -> Router route page -> String -> ( Router route page, Cmd msg )
+external config router url_ =
+    update config (UrlRequest Push (External url_)) router
 
 
 {-| currentRoute
