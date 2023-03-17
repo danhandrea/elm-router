@@ -30,6 +30,10 @@ This library helps with routing in elm [applications](https://package.elm-lang.o
 - 4.1.0
   - add replaceUrl method
 
+- 4.2.0
+  - Added:
+    - key : Router.Router route page -> Browser.Navigation.Key (might break stuff if used)
+
 ## Notes
 
 - [Official Guide](https://guide.elm-lang.org/) might be easier for your app

@@ -6,7 +6,7 @@ module Router exposing
     , init, update, view, subscriptions
     , onUrlChange, onUrlRequest
     , mapUpdate, mapView
-    , url, route, page, viewport, base
+    , url, route, page, viewport, base, key
     , redirect, reload, replaceUrl
     , Event(..)
     )
@@ -53,7 +53,7 @@ module Router exposing
 
 # Query
 
-@docs url, route, page, viewport, base
+@docs url, route, page, viewport, base, key
 
 
 # Navigation
@@ -200,7 +200,7 @@ type alias Layout msg =
 type Router route page
     = Router
         { url : Url
-        , key : Key
+        , key_ : Key
         , base_ : Url
         , route : route
         , pages : Dict String page
@@ -232,7 +232,7 @@ init config initialUrl key_ =
     in
     ( Router
         { url = initialUrl
-        , key = key_
+        , key_ = key_
         , base_ = base_
         , route = initialRoute
         , pages = pages
@@ -315,7 +315,7 @@ update config message (Router ({ pages } as router)) =
                                         delay time (DelayedNavigationTo viewportUrl navigationMode |> config.bind)
 
                                     Nothing ->
-                                        Nav.pushUrl router.key (Url.toString viewportUrl)
+                                        Nav.pushUrl router.key_ (Url.toString viewportUrl)
                         in
                         ( navCmd, trigger config.options.onEvent <| UrlRequested viewportUrl )
 
@@ -327,10 +327,10 @@ update config message (Router ({ pages } as router)) =
         DelayedNavigationTo navUrl navigationMode ->
             case navigationMode of
                 Push ->
-                    ( Router router, Nav.pushUrl router.key (Url.toString navUrl) )
+                    ( Router router, Nav.pushUrl router.key_ (Url.toString navUrl) )
 
                 Replace ->
-                    ( Router router, Nav.replaceUrl router.key (Url.toString navUrl) )
+                    ( Router router, Nav.replaceUrl router.key_ (Url.toString navUrl) )
 
         UrlChange nextUrl ->
             let
@@ -528,6 +528,16 @@ page (Router ({ pages } as router)) =
 viewport : Router route page -> Maybe Viewport
 viewport (Router ({ viewports } as router)) =
     Dict.get (Url.toString router.url) viewports
+
+
+{-| key
+
+Might cause issues if used outside of router, not sure
+
+-}
+key : Router route page -> Key
+key (Router { key_ }) =
+    key_
 
 
 {-| map update
